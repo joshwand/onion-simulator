@@ -1,0 +1,5 @@
+streamlit
+numpy
+matplotlib
+plotly
+shapely
