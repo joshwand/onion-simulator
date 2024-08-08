@@ -105,12 +105,12 @@ def classic_cuts(onion, n_vertical, n_horizontal):
         x = -onion.radius + i * onion.radius * 2 / n_vertical
         cuts.append(Cut((x, 0), (x, onion.radius)))
     
-    # Horizontal cuts
-    for i in range(1, n_horizontal):
-        y = i * onion.radius / n_horizontal
+    # Horizontal cuts (excluding the bottom static cut)
+    for i in range(1, n_horizontal + 1):
+        y = i * onion.radius / (n_horizontal + 1)
         cuts.append(Cut((-onion.radius, y), (onion.radius, y)))
     
-    # Add static bottom cut
+    # Add static bottom cut (always included)
     cuts.append(Cut((-onion.radius, 0), (onion.radius, 0)))
     
     return cuts
@@ -119,10 +119,15 @@ def kenji_cuts(onion, n_cuts, pct_below):
     cuts = []
     target_point = (0, -pct_below * onion.radius)  # pct_below% of the radius below the center
     
+    n_cuts += 2
     for i in range(n_cuts):
         angle = np.pi * i / (n_cuts - 1)
         start_x = onion.radius * np.cos(angle)
         start_y = onion.radius * np.sin(angle)
+        
+        # Skip cuts at (-r, 0) and (r, 0)
+        if abs(start_x) == onion.radius and start_y == 0:
+            continue
         
         # Calculate the intersection with the circle
         dx = start_x - target_point[0]
@@ -316,11 +321,11 @@ def main():
         cuts = custom_cuts(onion, n_horizontal, vertical_height, horizontal_depth, n_vertical)
     elif cutting_method == "Classic":
         n_vertical = st.sidebar.slider("Number of Vertical Cuts", 4, 16, 10)
-        n_horizontal = st.sidebar.slider("Number of Horizontal Cuts", 1, 10, 2)
+        n_horizontal = st.sidebar.slider("Number of Horizontal Cuts", 0, 10, 2)
         cuts = classic_cuts(onion, n_vertical, n_horizontal)
     else:  # Kenji method
         n_cuts = st.sidebar.slider("Number of Cuts", 3, 20, 10)
-        pct_below = st.sidebar.slider("Target Point (fraction of radius below center)", 0.1, 0.9, 0.5)
+        pct_below = st.sidebar.slider("Target Point (fraction of radius below center)", 0.1, 0.9, 0.6)
         cuts = kenji_cuts(onion, n_cuts, pct_below)
 
     # Apply cuts and calculate polygons
