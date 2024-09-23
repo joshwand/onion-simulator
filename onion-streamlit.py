@@ -564,34 +564,32 @@ def main():
 
     initialize_session_state()
 
-    with st.sidebar:
-        with st.expander("Onion Parameters"):
-            st.sidebar.header("Onion Parameters")
-            onion_diameter = st.sidebar.slider("Onion Diameter (inches)", 1.0, 10.0, 5.0)
-            n_layers = st.sidebar.slider("Number of Layers", 3, 20, 11)
-            
-            onion = HalfOnion(onion_diameter, n_layers)
-            st.session_state.onion = onion
-            logger.info(f"Onion created: diameter={onion_diameter}, layers={n_layers}")
+    
             
 
     # Decode settings from URL if present
     onion, cuts, cutting_method = decode_settings_from_url()
     if onion and cuts and cutting_method:
         logger.info(f"Decoded settings from URL: {onion}, {cuts}, {cutting_method}")
-        st.session_state.onion = onion
+        st.session_state.onion = onion        
         st.session_state.cuts = cuts
-        st.session_state.cutting_method = cutting_method     
-    
-   
+        st.session_state.cutting_method = cutting_method
 
-    # Create sidebar for onion parameters
-    # with st.sidebar:
-        
-    #     if diameter != onion.radius * 2 or n_layers != onion.n_layers:
-    #         onion = HalfOnion(diameter, n_layers)
-    #         st.session_state.onion = onion
-    #         st.session_state.cuts = []  # Reset cuts when onion changes
+    else:
+        if not st.session_state.onion:
+            st.session_state.onion = HalfOnion(5.0, 11)
+
+    with st.sidebar:
+        with st.expander("Onion Parameters"):
+            st.sidebar.header("Onion Parameters")
+            onion_diameter = st.sidebar.slider("Onion Diameter (inches)", 1.0, 10.0, st.session_state.onion.radius * 2, 0.1)
+            n_layers = st.sidebar.slider("Number of Layers", 3, 20, st.session_state.onion.n_layers, 1)
+            
+            onion = HalfOnion(onion_diameter, n_layers)
+            st.session_state.onion = onion
+            logger.info(f"Onion created: diameter={onion_diameter}, layers={n_layers}")
+
+   
 
     cutting_method = select_cutting_method()
     if cutting_method != st.session_state.cutting_method or st.session_state.cuts is None or st.session_state.cuts == []:

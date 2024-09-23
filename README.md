@@ -1,7 +1,14 @@
+## IN PROGRESS
+
+
 
 ## TODO
 
-better UI
+better UI for manipulating the cuts including deletion
+adjustment for layer thickness curve
+volumetric analysis
+
+# DONE
 shareable URLs
 
 # onion-simulator
