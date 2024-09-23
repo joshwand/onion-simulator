@@ -163,7 +163,7 @@ def kenji_cuts(onion, n_cuts, pct_below):
     
     return cuts
 
-def custom_cuts(onion, n_horizontal, vertical_height, horizontal_depth, n_vertical):
+def josh_cuts(onion, n_horizontal, vertical_height, horizontal_depth, n_vertical):
     cuts = []
     layer_width = onion.radius / onion.n_layers
 
@@ -366,16 +366,6 @@ def initialize_session_state():
     logger.info(f"Session state initialized: onion={st.session_state.onion}, cuts={st.session_state.cuts}, cutting_method={st.session_state.cutting_method}, update_triggered={st.session_state.update_triggered}")
 
 
-def create_onion():
-    st.sidebar.header("Onion Parameters")
-    onion_diameter = st.sidebar.slider("Onion Diameter (inches)", 1.0, 10.0, 5.0)
-    n_layers = st.sidebar.slider("Number of Layers", 3, 20, 11)
-    
-    onion = HalfOnion(onion_diameter, n_layers)
-    st.session_state.onion = onion
-    logger.info(f"Onion created: diameter={onion_diameter}, layers={n_layers}")
-    return onion
-
 def select_cutting_method():
     st.sidebar.header("Cutting Method")
     cutting_method = st.sidebar.selectbox("Select Cutting Method", ["Josh's Method", "Classic", "Kenji", "Custom"])
@@ -383,14 +373,14 @@ def select_cutting_method():
     st.session_state.cuts = []
     return cutting_method
 
-def generate_cuts(onion, cutting_method):
+def generate_cuts_menu(onion, cutting_method):
     st.sidebar.header("Cut Parameters")
     if cutting_method == "Josh's Method":
         n_horizontal = st.sidebar.slider("Number of Horizontal Cuts", 2, 10, 3)
-        vertical_height = st.sidebar.slider("Vertical Cut Height (fraction of radius)", 0.1, 1.0, 0.2)
-        horizontal_depth = st.sidebar.slider("Horizontal Cut Depth (fraction of radius)", 0.1, 1.0, 0.85)
         n_vertical = st.sidebar.slider("Number of Vertical Cuts", 3, 20, 10)
-        cuts = custom_cuts(onion, n_horizontal, vertical_height, horizontal_depth, n_vertical)
+        horizontal_depth = st.sidebar.slider("Horizontal Cut Depth (fraction of radius)", 0.1, 1.0, 0.85)
+        vertical_height = st.sidebar.slider("Vertical Cut Depth (fraction of radius)", 0.1, 1.0, 0.17)
+        cuts = josh_cuts(onion, n_horizontal, vertical_height, horizontal_depth, n_vertical)
     elif cutting_method == "Classic":
         n_vertical = st.sidebar.slider("Number of Vertical Cuts", 4, 16, 10)
         n_horizontal = st.sidebar.slider("Number of Horizontal Cuts", 0, 10, 2)
@@ -450,7 +440,6 @@ def display_interactive_cuts(onion, cuts):
         # if st.button("Update Cuts"):
         check_for_updates()
         
-        # st.write("Drag the red lines to adjust cuts or use the 'Remove active shape' button to delete a cut. Click 'Update Cuts' to apply changes.")
         
     except Exception as e:
         logger.error(f"Error in display_interactive_cuts: {str(e)}")
@@ -490,12 +479,16 @@ def display_aspect_ratio_distribution(shapes):
     ax_square.set_ylabel('Frequency')
     st.pyplot(fig_square)
 
-def display_piece_statistics(areas, shapes):
+def display_piece_statistics(areas, onion):
     st.subheader("Piece Statistics")
+    
+    
+
     st.markdown(f"""
     Number of pieces: {len(areas)}  
     Average piece area: {np.mean(areas):.4f} sq inches  
     Std dev of areas: {np.std(areas):.4f} sq inches  
+    Normalized piece std dev: {np.std([area for area in areas if area > 0.01]) / (np.pi * onion.radius**2):.4f} %
     
     """)
     # Average aspect ratio (1 is perfect): {np.mean([s[2] for s in shapes]):.4f}
@@ -558,11 +551,29 @@ def main():
              </style>
              """, unsafe_allow_html=True)
     st.title("Onion Cutting Simulator")
-    
+    with st.expander("Instructions"):
+            st.caption("This app simulates cutting an onion into pieces. Make adjustments in the sidebar on the left, or make your own cuts by dragging the red lines.")
+            st.caption("I believe I've found a novel method (Josh's Method) for cutting onions. It's statistically better than any other method I've heard of. You can compare to Kenji's method or the classic method in the sidebar.")
+            st.caption("Drag the red lines to adjust cuts. Stats will update automatically.")
+            st.caption("Unfortunately there's no way to delete cuts yet; just drag the line outside the onion.")
+            st.caption("As you make changes, the URL will be updated. You can share the URL with others to share your preferred onion cuts")
+            st.caption("Feel free to submit issues or pull requests on the [GitHub repository](https://github.com/joshwand/onion-simulator).")
+
 
     logger.info("Starting main function")
 
     initialize_session_state()
+
+    with st.sidebar:
+        with st.expander("Onion Parameters"):
+            st.sidebar.header("Onion Parameters")
+            onion_diameter = st.sidebar.slider("Onion Diameter (inches)", 1.0, 10.0, 5.0)
+            n_layers = st.sidebar.slider("Number of Layers", 3, 20, 11)
+            
+            onion = HalfOnion(onion_diameter, n_layers)
+            st.session_state.onion = onion
+            logger.info(f"Onion created: diameter={onion_diameter}, layers={n_layers}")
+            
 
     # Decode settings from URL if present
     onion, cuts, cutting_method = decode_settings_from_url()
@@ -571,26 +582,22 @@ def main():
         st.session_state.onion = onion
         st.session_state.cuts = cuts
         st.session_state.cutting_method = cutting_method     
-    else:
-        onion = create_onion()
     
+   
 
     # Create sidebar for onion parameters
-    with st.sidebar:
-        st.header("Onion Parameters")
-        diameter = st.slider("Onion Diameter (cm)", 5.0, 15.0, onion.radius * 2, 0.1)
-        n_layers = st.slider("Number of Layers", 3, 15, onion.n_layers)
-
-        if diameter != onion.radius * 2 or n_layers != onion.n_layers:
-            onion = HalfOnion(diameter, n_layers)
-            st.session_state.onion = onion
-            st.session_state.cuts = []  # Reset cuts when onion changes
+    # with st.sidebar:
+        
+    #     if diameter != onion.radius * 2 or n_layers != onion.n_layers:
+    #         onion = HalfOnion(diameter, n_layers)
+    #         st.session_state.onion = onion
+    #         st.session_state.cuts = []  # Reset cuts when onion changes
 
     cutting_method = select_cutting_method()
     if cutting_method != st.session_state.cutting_method or st.session_state.cuts is None or st.session_state.cuts == []:
         logger.info("Cutting method changed, generating new cuts")
         st.session_state.cutting_method = cutting_method
-        st.session_state.cuts = generate_cuts(onion, cutting_method)
+        st.session_state.cuts = generate_cuts_menu(onion, cutting_method)
         logger.info(f"Generated new cuts: {st.session_state.cuts}")
     else:
         logger.info("Using existing cuts from session state")
@@ -617,7 +624,7 @@ def main():
         display_resulting_pieces(polygons, onion)
 
     with col4:
-        display_piece_statistics(areas, shapes)
+        display_piece_statistics(areas, onion)
     
     # col5, col6 = st.columns(2)
     # with col5:
