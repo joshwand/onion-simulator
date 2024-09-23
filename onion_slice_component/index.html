@@ -1,0 +1,129 @@
+<div id='plotly-chart'></div>
+
+<script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+<script>
+    const plotlyChart = document.getElementById('plotly-chart');
+
+    function sendMessageToStreamlitClient(type, data) {
+        var outData = Object.assign({
+            isStreamlitMessage: true,
+            type: type,
+            value: data
+        }, data);
+        window.parent.postMessage(outData, "*");
+        console.info('Sent message to Streamlit:', outData);
+    }
+    
+    //   function init() {
+    //     sendMessageToStreamlitClient("streamlit:componentReady", {apiVersion: 1});
+    //   }
+    
+    function setFrameHeight(height) {
+        sendMessageToStreamlitClient("streamlit:setFrameHeight", {height: height});
+    }
+    
+    // The `data` argument can be any JSON-serializable value.
+    function sendDataToPython(data) {
+        sendMessageToStreamlitClient("streamlit:setComponentValue", data);
+    }
+    
+    function debounce(func, wait, immediate) {
+        let timeout;
+        return function() {
+            const context = this, args = arguments;
+            const later = function() {
+                timeout = null;
+                if (!immediate) func.apply(context, args);
+            };
+            const callNow = immediate && !timeout;
+            clearTimeout(timeout);
+            timeout = setTimeout(later, wait);
+            if (callNow) func.apply(context, args);
+        };
+    }
+
+    function updateShapes(eventdata) {
+        debounce(_updateShapes(eventdata), 3000);
+    }
+
+    function _updateShapes(eventdata) {
+        const shapes = eventdata['shapes'] || plotlyChart.layout.shapes;
+        if (shapes) {
+            console.log("shapes: ", shapes);
+            const updatedShapes = shapes
+            .filter(shape => shape.type === 'line')
+            .map(shape => ({
+                x0: shape.x0,
+                y0: shape.y0,
+                x1: shape.x1,
+                y1: shape.y1
+            }));
+            
+            sendDataToPython(updatedShapes);
+            
+        }
+    }
+    
+    function render(figJSON) {
+        
+        Plotly.newPlot(plotlyChart, figJSON.data, figJSON.layout, {
+            editable: true,
+            displayModeBar: true,
+            modeBarButtonsToRemove: ['hoverClosestCartesian', 'hoverCompareCartesian','download','autoScale2d','resetScale2d','toggleSpikelines'],
+            modeBarButtonsToAdd: ['drawline', 'eraseshape']
+        }
+    ).then(() => {
+            let isMouseDown = false;
+            
+            plotlyChart.on('plotly_relayout', updateShapes);
+            
+            plotlyChart.addEventListener('mousedown', () => { isMouseDown = true; });
+            
+            // plotlyChart.addEventListener('mouseup', () => {
+            //     if (isMouseDown) {
+            //         isMouseDown = false;
+            //         updateShapes({shapes: plotlyChart.layout.shapes});
+            //     }
+            // });
+            
+            const deleteButton = document.querySelector('.modebar-btn[data-title="Remove active shape"]');
+            if (deleteButton) {
+                deleteButton.addEventListener('click', () => {
+                    setTimeout(() => {
+                        updateShapes({shapes: plotlyChart.layout.shapes});
+                    }, 100);
+                });
+            }
+            
+            // sendMessageToStreamlitClient("streamlit:componentReady", {apiVersion: 1});
+        }).catch(err => {
+            console.error('Error in Plotly:', err);
+            window.parent.postMessage({
+                type: 'error',
+                error: err.toString()
+            }, '*');
+        });
+    }
+    
+    // data is any JSON-serializable value you sent from Python,
+      // and it's already deserialized for you.
+    function onDataFromPython(event) {
+        if (event.data.type !== "streamlit:render") return;
+        console.log('Received data from Streamlit:', event.data);
+        render(JSON.parse(event.data.args.fig));  // Access values sent from Python here!
+      }
+    
+    // Hack to autoset the iframe height.
+    window.addEventListener("load", function() {
+    window.setTimeout(function() {
+        setFrameHeight(document.documentElement.clientHeight)
+    }, 0);
+    });
+
+      // Optionally, if the automatic height computation fails you, give this component a height manually
+      // by commenting out below:
+    //   setFrameHeight(200);
+
+    window.addEventListener("message", onDataFromPython);
+    sendMessageToStreamlitClient("streamlit:componentReady", {apiVersion: 1});  
+</script>

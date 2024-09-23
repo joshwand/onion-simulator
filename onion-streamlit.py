@@ -4,9 +4,18 @@ import matplotlib.pyplot as plt
 from matplotlib.patches import Arc
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
+import plotly
 from shapely.geometry import LineString, Point, Polygon
 from shapely.ops import unary_union, polygonize
 from shapely.affinity import affine_transform, scale
+import logging
+import traceback
+import json
+
+
+logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO)
+
 
 class Cut:
     def __init__(self, start, end):
@@ -15,6 +24,9 @@ class Cut:
 
     def as_shapely(self):
         return LineString([self.start, self.end])
+    
+    def __repr__(self) -> str:
+        return f"Cut({self.start}, {self.end})"
 
 class HalfOnion:
     def __init__(self, diameter, n_layers):
@@ -204,6 +216,12 @@ def custom_cuts(onion, n_horizontal, vertical_height, horizontal_depth, n_vertic
 
     return cuts
 
+import plotly.graph_objects as go
+import numpy as np
+
+import plotly.graph_objects as go
+import numpy as np
+
 def visualize_onion_and_cuts(onion, cuts):
     fig = go.Figure()
 
@@ -211,37 +229,96 @@ def visualize_onion_and_cuts(onion, cuts):
     theta = np.linspace(0, np.pi, 100)
     x = onion.radius * np.cos(theta)
     y = onion.radius * np.sin(theta)
-    fig.add_trace(go.Scatter(x=x.tolist(), y=y.tolist(), mode='lines', name='Onion outline'))
+    fig.add_trace(go.Scatter(x=x.tolist(), y=y.tolist(), mode='lines', name='Onion outline', line=dict(color='black'), hoverinfo='skip'))
 
     # Draw layers
     for r in onion.layer_radii[1:]:
         x = r * np.cos(theta)
         y = r * np.sin(theta)
-        fig.add_trace(go.Scatter(x=x.tolist(), y=y.tolist(), mode='lines', line=dict(dash='dot'), name=f'Layer (r={r:.2f})'))
+        fig.add_trace(go.Scatter(x=x.tolist(), y=y.tolist(), 
+                                 mode='lines', 
+                                 line=dict(dash='dot', color='gray'), 
+                                 name=f'Layer (r={r:.2f})', 
+                                 hoverinfo='skip'))
 
     # Draw cuts
     for i, cut in enumerate(cuts):
-        fig.add_trace(go.Scatter(x=[cut.start[0], cut.end[0]], 
-                                 y=[cut.start[1], cut.end[1]], 
-                                 mode='lines+markers',
-                                 name=f'Cut {i+1}',
-                                 line=dict(color='red'),
-                                 marker=dict(size=8, symbol='square')))
+        fig.add_shape(
+            type="line",
+            x0=cut.start[0], y0=cut.start[1],
+            x1=cut.end[0], y1=cut.end[1],
+            line=dict(color="red", width=2),
+            editable=True,            
+        )
+        # fig.add_trace(go.Scatter(
+        #     x=[cut.start[0], cut.end[0]], 
+        #     y=[cut.start[1], cut.end[1]], 
+        #     mode='lines+markers', 
+        #     line=dict(color='red', width=2),
+        #     marker=dict(color='red', size=10),
+        #     hoverinfo='skip',
+            
+        # ))
 
+    # Calculate the range for both axes
+    xrange = [-onion.radius, onion.radius+0.5]
+    yrange = [0, onion.radius+0.5]
+
+    # Update layout
     fig.update_layout(
-        title='Onion with Cuts',
+        title='Onion with Cuts (Interactive)',
+        autosize=True,
         xaxis_title='X',
         yaxis_title='Y',
-        yaxis=dict(scaleanchor="x", scaleratio=1),
         showlegend=False,
-        height=600,
-        width=600
+        # height=300,
+        # width=300,
+        modebar_remove=['zoom2d', 'pan2d', 'select2d', 'lasso2d', 'zoomIn2d', 'zoomOut2d', 'autoScale2d', 'resetScale2d', 'hoverClosestCartesian', 'hoverCompareCartesian', 'toggleSpikelines', 'download'],
+        modebar_add=['drawline','eraseshape'],
+        newshape=dict(line=dict(color='red', width=2)),
+        newselection=dict(mode='immediate'),
+        margin=dict(l=0, r=0, b=0, t=0),
+        xaxis=dict(
+            range=xrange,
+            scaleanchor="y",
+            scaleratio=1,
+            visible=False,
+            fixedrange=True
+        ),
+        yaxis=dict(
+            range=yrange,
+            visible=False
+        ),
+        
     )
-
+    fig.layout.xaxis.fixedrange = True
+    fig.layout.yaxis.fixedrange = True
     return fig
 
+def update_cuts(fig):
+    logger.info("Entering update_cuts function")
+    
+    updated_cuts = []
+    for i, shape in enumerate(fig.layout.shapes):
+        if shape.type == 'line':
+            start = (shape.x0, shape.y0)
+            end = (shape.x1, shape.y1)
+            updated_cuts.append(Cut(start, end))
+            logger.info(f"Cut {i}: Start {start}, End {end}")
+    logger.info(f"Total updated cuts: {len(updated_cuts)}")
 
-def visualize_pieces(polygons, title):
+    # compare the shapes in the figure to the cuts in the session state
+    if updated_cuts != st.session_state.cuts:
+        logger.info("Cuts updated by user interaction")
+        st.session_state.cuts = updated_cuts
+        st.session_state.update_triggered = True
+        logger.info(f"New cuts from user interaction: {updated_cuts}")
+        st.experimental_rerun()
+    else:
+        logger.info("No changes detected in cuts")
+    return updated_cuts
+        
+def visualize_pieces(polygons, onion):
     fig = go.Figure()
 
     for i, polygon in enumerate(polygons):
@@ -257,61 +334,50 @@ def visualize_pieces(polygons, title):
         ))
 
     fig.update_layout(
-        height=500,
+        height=250,
         width=500,
         showlegend=False,
-        title_text=f"{title} - Resulting Pieces"
+        # title_text=f"{title} - Resulting Pieces"
+        yaxis=dict(range=[0, onion.radius+0.5]),
+        margin=dict(l=0, r=0, b=0, t=0),        
     )
     
     fig.update_xaxes(scaleanchor="y", scaleratio=1, showgrid=False, zeroline=False, showticklabels=False)
-    fig.update_yaxes(scaleanchor="x", scaleratio=1, showgrid=False, zeroline=False, showticklabels=False)
+    fig.update_yaxes( scaleratio=1, showgrid=False, zeroline=False, showticklabels=False) # scaleanchor="x",    
 
     return fig
 
-def visualize_pieces(polygons, title):
-    fig = go.Figure()
-
-    for i, polygon in enumerate(polygons):
-        x, y = polygon.exterior.xy
-        color = plt.cm.tab10(i % 10)
-        fig.add_trace(go.Scatter(
-            x=list(x), y=list(y), 
-            fill='toself', 
-            fillcolor=f'rgba({int(color[0]*255)},{int(color[1]*255)},{int(color[2]*255)},0.6)',
-            line=dict(color='white', width=1),
-            mode='lines',
-            # name=f'Piece {i+1}'
-        ))
-
-    fig.update_layout(
-        height=500,
-        width=500,
-        showlegend=False,
-        title_text=f"{title} - Resulting Pieces"
-    )
+def initialize_session_state():
+    if 'onion' not in st.session_state:
+        st.session_state.onion = None
+    if 'cuts' not in st.session_state:
+        st.session_state.cuts = None
+    if 'cutting_method' not in st.session_state:
+        st.session_state.cutting_method = None
+    if 'update_triggered' not in st.session_state:
+        st.session_state.update_triggered = False
     
-    fig.update_xaxes(scaleanchor="y", scaleratio=1, showgrid=False, zeroline=False, showticklabels=False)
-    fig.update_yaxes(scaleanchor="x", scaleratio=1, showgrid=False, zeroline=False, showticklabels=False)
+    logger.info(f"Session state initialized: onion={st.session_state.onion}, cuts={st.session_state.cuts}, cutting_method={st.session_state.cutting_method}, update_triggered={st.session_state.update_triggered}")
 
-    return fig
 
-def main():
-    st.set_page_config(layout="wide")
-    st.title("Onion Cutting Simulator")
-
-    # Sidebar for inputs
+def create_onion():
     st.sidebar.header("Onion Parameters")
     onion_diameter = st.sidebar.slider("Onion Diameter (inches)", 1.0, 10.0, 5.0)
     n_layers = st.sidebar.slider("Number of Layers", 3, 20, 11)
-
-    # Create the onion object
+    
     onion = HalfOnion(onion_diameter, n_layers)
+    st.session_state.onion = onion
+    logger.info(f"Onion created: diameter={onion_diameter}, layers={n_layers}")
+    return onion
 
-    # Add method selector
+def select_cutting_method():
     st.sidebar.header("Cutting Method")
-    cutting_method = st.sidebar.selectbox("Select Cutting Method", ["Josh's Method", "Classic", "Kenji"])
+    cutting_method = st.sidebar.selectbox("Select Cutting Method", ["Josh's Method", "Classic", "Kenji", "Custom"])
+    logger.info(f"Cutting method selected: '{cutting_method}'")
+    st.session_state.cuts = []
+    return cutting_method
 
-    # Add method-specific parameters
+def generate_cuts(onion, cutting_method):
     st.sidebar.header("Cut Parameters")
     if cutting_method == "Josh's Method":
         n_horizontal = st.sidebar.slider("Number of Horizontal Cuts", 2, 10, 3)
@@ -323,70 +389,179 @@ def main():
         n_vertical = st.sidebar.slider("Number of Vertical Cuts", 4, 16, 10)
         n_horizontal = st.sidebar.slider("Number of Horizontal Cuts", 0, 10, 2)
         cuts = classic_cuts(onion, n_vertical, n_horizontal)
-    else:  # Kenji method
+    elif cutting_method == "Kenji":  # Kenji method
         n_cuts = st.sidebar.slider("Number of Cuts", 3, 20, 10)
         pct_below = st.sidebar.slider("Target Point (fraction of radius below center)", 0.1, 0.9, 0.6)
         cuts = kenji_cuts(onion, n_cuts, pct_below)
+    elif cutting_method == "Custom":
+        cuts = [Cut((-onion.radius, 0), (onion.radius, 0))]
+        
+    
+    logger.info(f"New cuts generated: {cuts}")
+    return cuts
 
-    # Apply cuts and calculate polygons
-    polygons = apply_cuts(onion, cuts)
 
-    # First row: Onion with Cuts and Piece Area Distribution
-    st.header("Onion Cuts and Piece Size Distribution")
-    col1, col2 = st.columns(2)
+from onion_slice_component import onion_slice_component
+import traceback
 
-    with col1:
-        st.subheader("Onion with Cuts")
+
+def display_interactive_cuts(onion, cuts):
+    global logger
+    st.subheader("Onion with Cuts (Interactive)")
+    try:
+        logger.info(f"Generating fig_cuts with {len(cuts)} cuts")
         fig_cuts = visualize_onion_and_cuts(onion, cuts)
-        st.plotly_chart(fig_cuts, use_container_width=True)
+        logger.info("Fig_cuts generated successfully")
+        
+        logger.info("Calling slice_viz_events")
+        figJSON = json.dumps(fig_cuts, cls=plotly.utils.PlotlyJSONEncoder)
+        component_value = onion_slice_component(fig=figJSON)
+        logger.info(f"slice_viz_events initial return: {component_value}")
+        
+        # Initialize a placeholder for the component
+        component_placeholder = st.empty()
+        
+        # Function to check for updates
+        def check_for_updates():
+            if component_value:
+                logger.info(f"check_for_updates: Received component value: {component_value}")
+                logger.info(f"check_for_updates: len(cuts): {len(component_value)}")
+                if isinstance(component_value, list):
+                    new_cuts = [Cut((shape['x0'], shape['y0']), (shape['x1'], shape['y1'])) for shape in component_value]
+                    logger.info(f"New cuts from user interaction: {new_cuts}")
+                    logger.info(f"Current cuts: {st.session_state.cuts}")
+                    st.session_state.cutting_method = "Custom"
+                    if new_cuts != st.session_state.cuts:
+                        st.session_state.cuts = new_cuts
+                        st.session_state.update_triggered = True
+                        logger.info(f"New cuts from user interaction: {new_cuts}")
+                        # st.rerun()
+                elif isinstance(component_value, dict) and 'error' in component_value:
+                    logger.error(f"Error in Plotly: {component_value['error']}")
+                    st.error(f"An error occurred in the Plotly visualization: {component_value['error']}")
+        
+        # Use a button to trigger updates (you can remove this if you want automatic updates)
+        # if st.button("Update Cuts"):
+        check_for_updates()
+        
+        # st.write("Drag the red lines to adjust cuts or use the 'Remove active shape' button to delete a cut. Click 'Update Cuts' to apply changes.")
+        
+    except Exception as e:
+        logger.error(f"Error in display_interactive_cuts: {str(e)}")
+        logger.error(f"Traceback: {traceback.format_exc()}")
+        st.error(f"An error occurred while displaying the interactive cuts: {str(e)}")
+        st.write("Please check the console for more detailed error information.")
+        
+def display_piece_area_distribution(areas):
+    st.subheader("Piece Area Distribution")
+    fig_hist, ax_hist = plt.subplots(figsize=(8, 5))
+    
+    
+    ax_hist.hist(areas, bins=20)
+    ax_hist.set_xlim(0, 0.5) 
+    ax_hist.set_title("Distribution of Piece Areas")
+    ax_hist.set_xlabel('Area (sq inches)')
+    ax_hist.set_ylabel('Frequency')
+    median_area = np.median(areas)
+    std_dev_area = np.std(areas)
+    plt.tight_layout()
+    st.pyplot(fig_hist)
+    st.caption(f"Median: {median_area:.4f} sq inches, Std Dev: {std_dev_area:.4f} sq inches")
 
-    with col2:
-        st.subheader("Piece Area Distribution")
-        areas, shapes = calculate_areas_and_shapes(polygons)
-        fig_hist, ax_hist = plt.subplots(figsize=(8, 5))
-        ax_hist.hist(areas, bins=20)
-        ax_hist.set_title("Distribution of Piece Areas")
-        ax_hist.set_xlabel('Area (sq inches)')
-        ax_hist.set_ylabel('Frequency')
-        median_area = np.median(areas)
-        std_dev_area = np.std(areas)
-        plt.tight_layout()
-        st.pyplot(fig_hist)
-        st.caption(f"Median: {median_area:.4f} sq inches, Std Dev: {std_dev_area:.4f} sq inches")
+def display_resulting_pieces(polygons, onion):
+    st.subheader("Resulting Pieces")
+    fig_pieces = visualize_pieces(polygons, onion)
+    st.plotly_chart(fig_pieces, use_container_width=True)
 
-    # Second row: Resulting Pieces and Piece Aspect Ratio Distribution
-    st.header("Resulting Pieces and Aspect Ratio Distribution")
-    col3, col4 = st.columns(2)
+def display_aspect_ratio_distribution(shapes):
+    st.subheader("Piece Aspect Ratio Distribution")
+    fig_square, ax_square = plt.subplots(figsize=(8, 5))
+    ax_square.hist([s[2] for s in shapes], bins=20)
+    ax_square.set_title("Distribution of Piece Aspect Ratio")
+    ax_square.set_xlabel('Aspect Ratio (1 is perfect square)')
+    ax_square.set_ylabel('Frequency')
+    st.pyplot(fig_square)
 
-    with col3:
-        st.subheader("Resulting Pieces")
-        fig_pieces = visualize_pieces(polygons, cutting_method)
-        st.plotly_chart(fig_pieces, use_container_width=True)
+def display_piece_statistics(areas, shapes):
+    st.subheader("Piece Statistics")
+    st.markdown(f"""
+    Number of pieces: {len(areas)}  
+    Average piece area: {np.mean(areas):.4f} sq inches  
+    Std dev of areas: {np.std(areas):.4f} sq inches  
+    Average aspect ratio (1 is perfect): {np.mean([s[2] for s in shapes]):.4f}
+    """)
 
-    with col4:
-        st.subheader("Piece Aspect Ratio Distribution")
-        fig_square, ax_square = plt.subplots(figsize=(8, 5))
-        ax_square.hist([s[2] for s in shapes], bins=20)
-        ax_square.set_title("Distribution of Piece Aspect Ratio")
-        ax_square.set_xlabel('Aspect Ratio (1 is perfect square)')
-        ax_square.set_ylabel('Frequency')
-        st.pyplot(fig_square)
-
-    # Display the piece statistics
-    st.header("Piece Statistics")
-    st.write(f"Number of pieces: {len(areas)}")
-    st.write(f"Average piece area: {np.mean(areas):.4f} sq inches")
-    st.write(f"Std dev of areas: {np.std(areas):.4f} sq inches")
-    st.write(f"Average aspect ratio (1 is perfect): {np.mean([s[2] for s in shapes]):.4f}")
-
-    # Add the piece shape visualization
+def display_piece_cross_sections(polygons, cutting_method):
     st.header("Piece Cross-Sections (Largest to Smallest)")
     try:
         piece_shape_plot = visualize_piece_shapes(polygons, cutting_method)
         st.plotly_chart(piece_shape_plot, use_container_width=True)
     except Exception as e:
+        logger.error(f"Error in visualizing piece shapes: {str(e)}")
         st.error(f"An error occurred while visualizing piece shapes: {str(e)}")
         st.write("Please try adjusting the cut parameters.")
+
+import streamlit as st
+import numpy as np
+import matplotlib.pyplot as plt
+
+def main():
+    st.set_page_config(layout="wide")
+    st.title("Onion Cutting Simulator")
+
+    logger.info("Starting main function")
+
+    initialize_session_state()
+    onion = create_onion()
+    cutting_method = select_cutting_method()
+
+    if cutting_method != st.session_state.cutting_method or st.session_state.cuts is None or st.session_state.cuts == []:
+        logger.info("Cutting method changed, generating new cuts")
+        st.session_state.cutting_method = cutting_method
+        st.session_state.cuts = generate_cuts(onion, cutting_method)
+        logger.info(f"Generated new cuts: {st.session_state.cuts}")
+    else:
+        logger.info("Using existing cuts from session state")
+
+    logger.info(f"Current cuts: {st.session_state.cuts}")
+
+    st.header("Interactive Onion Cuts and Piece Size Distribution")
+    col1, col2 = st.columns(2)
+
+    with col1:
+        display_interactive_cuts(onion, st.session_state.cuts)
+
+    logger.info(f"After display_interactive_cuts, cuts: {st.session_state.cuts}")
+
+    # Apply cuts and calculate results
+    polygons = apply_cuts(onion, st.session_state.cuts)
+    areas, shapes = calculate_areas_and_shapes(polygons)
+    logger.info(f"Number of polygons: {len(polygons)}, Number of areas: {len(areas)}")
+
+    with col2:
+        display_piece_area_distribution(areas)
+        display_piece_statistics(areas, shapes)
+
+    # st.header("Resulting Pieces and Aspect Ratio Distribution")
+    col3, col4 = st.columns(2)
+
+    with col3:
+        display_resulting_pieces(polygons, onion)
+
+    with col4:
+        display_aspect_ratio_distribution(shapes)
+
+    
+    
+    logger.info("Attempting to display piece cross-sections")
+    display_piece_cross_sections(polygons, cutting_method)
+
+    # Reset update trigger
+    if st.session_state.update_triggered:
+        logger.info("Resetting update trigger")
+        st.session_state.update_triggered = False
+
+    logger.info("Main function completed")
 
 if __name__ == "__main__":
     main()
