@@ -500,7 +500,7 @@ def display_piece_statistics(areas, shapes):
     """)
     # Average aspect ratio (1 is perfect): {np.mean([s[2] for s in shapes]):.4f}
 
-    
+
 def display_piece_cross_sections(polygons, cutting_method):
     st.header("Piece Cross-Sections (Largest to Smallest)")
     try:
@@ -550,7 +550,15 @@ def update_url(onion, cuts, cutting_method):
 
 def main():
     st.set_page_config(layout="wide")
+    st.write("""
+            <style>
+             section.main > div {
+                padding-top: 60px;
+             }
+             </style>
+             """, unsafe_allow_html=True)
     st.title("Onion Cutting Simulator")
+    
 
     logger.info("Starting main function")
 
