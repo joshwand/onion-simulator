@@ -496,9 +496,11 @@ def display_piece_statistics(areas, shapes):
     Number of pieces: {len(areas)}  
     Average piece area: {np.mean(areas):.4f} sq inches  
     Std dev of areas: {np.std(areas):.4f} sq inches  
-    Average aspect ratio (1 is perfect): {np.mean([s[2] for s in shapes]):.4f}
+    
     """)
+    # Average aspect ratio (1 is perfect): {np.mean([s[2] for s in shapes]):.4f}
 
+    
 def display_piece_cross_sections(polygons, cutting_method):
     st.header("Piece Cross-Sections (Largest to Smallest)")
     try:
@@ -609,9 +611,9 @@ def main():
     with col4:
         display_piece_statistics(areas, shapes)
     
-    col5, col6 = st.columns(2)
-    with col5:
-        display_aspect_ratio_distribution(shapes)
+    # col5, col6 = st.columns(2)
+    # with col5:
+    #     display_aspect_ratio_distribution(shapes)
 
     logger.info("Attempting to display piece cross-sections")
     display_piece_cross_sections(polygons, cutting_method)
