@@ -1,7 +1,6 @@
 import streamlit as st
 import numpy as np
 import matplotlib.pyplot as plt
-from matplotlib.patches import Arc
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import plotly
@@ -11,6 +10,7 @@ from shapely.affinity import affine_transform, scale
 import logging
 import traceback
 import json
+import urllib.parse
 
 
 logger = logging.getLogger(__name__)
@@ -38,6 +38,10 @@ class HalfOnion:
         return [Point(0, 0).buffer(r).boundary.intersection(Point(0, 0).buffer(self.radius).intersection(Polygon([(-self.radius, 0), (self.radius, 0), (self.radius, self.radius), (-self.radius, self.radius)]))) for r in self.layer_radii[1:]]
 
 def apply_cuts(onion, cuts):
+
+    # remove any cuts that have length < 0.001
+    cuts = [cut for cut in cuts if (cut.end[0] - cut.start[0])**2 + (cut.end[1] - cut.start[1])**2 > 0.001]
+
     lines = [cut.as_shapely() for cut in cuts]
     lines.extend(onion.create_layer_boundaries())
     half_circle = Point(0, 0).buffer(onion.radius * 1.001).intersection(Polygon([(-onion.radius, 0), (onion.radius, 0), (onion.radius, onion.radius), (-onion.radius, onion.radius)]))
@@ -167,13 +171,13 @@ def custom_cuts(onion, n_horizontal, vertical_height, horizontal_depth, n_vertic
     vertical_positions = [-onion.radius + i * onion.radius * 2 / (n_vertical - 1) for i in range(n_vertical)]
 
     # Find the vertical cuts closest to the desired horizontal depth
-    left_cut_index = np.argmin(np.abs(np.array(vertical_positions) + onion.radius * horizontal_depth))
-    right_cut_index = np.argmin(np.abs(np.array(vertical_positions) - onion.radius * horizontal_depth))
+    left_cut_index = np.argmin(np.abs(np.array(vertical_positions) + onion.radius * (1 -horizontal_depth)))
+    right_cut_index = np.argmin(np.abs(np.array(vertical_positions) - onion.radius * (1 -horizontal_depth)))
 
     # Horizontal cuts
     horizontal_cuts = []
     for i in range(n_horizontal):
-        y = onion.radius * (i + 1) / (n_horizontal + 1) * vertical_height
+        y = onion.radius * (i + 1) / (n_horizontal + 1) * (1 - vertical_height)
         start_x_left = -np.sqrt(onion.radius**2 - y**2)
         end_x_left = vertical_positions[left_cut_index]
         start_x_right = np.sqrt(onion.radius**2 - y**2)
@@ -271,7 +275,9 @@ def visualize_onion_and_cuts(onion, cuts):
         xaxis_title='X',
         yaxis_title='Y',
         showlegend=False,
-        # height=300,
+        
+        height=200,
+        
         # width=300,
         modebar_remove=['zoom2d', 'pan2d', 'select2d', 'lasso2d', 'zoomIn2d', 'zoomOut2d', 'autoScale2d', 'resetScale2d', 'hoverClosestCartesian', 'hoverCompareCartesian', 'toggleSpikelines', 'download'],
         modebar_add=['drawline','eraseshape'],
@@ -381,8 +387,8 @@ def generate_cuts(onion, cutting_method):
     st.sidebar.header("Cut Parameters")
     if cutting_method == "Josh's Method":
         n_horizontal = st.sidebar.slider("Number of Horizontal Cuts", 2, 10, 3)
-        vertical_height = st.sidebar.slider("Vertical Cut Height (fraction of radius)", 0.1, 1.0, 0.8)
-        horizontal_depth = st.sidebar.slider("Horizontal Cut Depth (fraction of radius)", 0.1, 1.0, 0.3)
+        vertical_height = st.sidebar.slider("Vertical Cut Height (fraction of radius)", 0.1, 1.0, 0.2)
+        horizontal_depth = st.sidebar.slider("Horizontal Cut Depth (fraction of radius)", 0.1, 1.0, 0.85)
         n_vertical = st.sidebar.slider("Number of Vertical Cuts", 3, 20, 10)
         cuts = custom_cuts(onion, n_horizontal, vertical_height, horizontal_depth, n_vertical)
     elif cutting_method == "Classic":
@@ -409,14 +415,14 @@ def display_interactive_cuts(onion, cuts):
     global logger
     st.subheader("Onion with Cuts (Interactive)")
     try:
-        logger.info(f"Generating fig_cuts with {len(cuts)} cuts")
+        # logger.info(f"Generating fig_cuts with {len(cuts)} cuts")
         fig_cuts = visualize_onion_and_cuts(onion, cuts)
-        logger.info("Fig_cuts generated successfully")
+        # logger.info("Fig_cuts generated successfully")
         
-        logger.info("Calling slice_viz_events")
+        # logger.info("Calling slice_viz_events")
         figJSON = json.dumps(fig_cuts, cls=plotly.utils.PlotlyJSONEncoder)
         component_value = onion_slice_component(fig=figJSON)
-        logger.info(f"slice_viz_events initial return: {component_value}")
+        # logger.info(f"slice_viz_events initial return: {component_value}")
         
         # Initialize a placeholder for the component
         component_placeholder = st.empty()
@@ -424,17 +430,17 @@ def display_interactive_cuts(onion, cuts):
         # Function to check for updates
         def check_for_updates():
             if component_value:
-                logger.info(f"check_for_updates: Received component value: {component_value}")
-                logger.info(f"check_for_updates: len(cuts): {len(component_value)}")
+                # logger.info(f"check_for_updates: Received component value: {component_value}")
+                # logger.info(f"check_for_updates: len(cuts): {len(component_value)}")
                 if isinstance(component_value, list):
                     new_cuts = [Cut((shape['x0'], shape['y0']), (shape['x1'], shape['y1'])) for shape in component_value]
-                    logger.info(f"New cuts from user interaction: {new_cuts}")
-                    logger.info(f"Current cuts: {st.session_state.cuts}")
+                    # logger.info(f"New cuts from user interaction: {new_cuts}")
+                    # logger.info(f"Current cuts: {st.session_state.cuts}")
                     st.session_state.cutting_method = "Custom"
                     if new_cuts != st.session_state.cuts:
                         st.session_state.cuts = new_cuts
                         st.session_state.update_triggered = True
-                        logger.info(f"New cuts from user interaction: {new_cuts}")
+                        # logger.info(f"New cuts from user interaction: {new_cuts}")
                         # st.rerun()
                 elif isinstance(component_value, dict) and 'error' in component_value:
                     logger.error(f"Error in Plotly: {component_value['error']}")
@@ -458,7 +464,9 @@ def display_piece_area_distribution(areas):
     
     
     ax_hist.hist(areas, bins=20)
-    ax_hist.set_xlim(0, 0.5) 
+    logger.info(f"st.session_state.onion.radius: {st.session_state.onion.radius}")
+    logger.info(f"st.session_state.onion.n_layers: {st.session_state.onion.n_layers}")
+    ax_hist.set_xlim(0, st.session_state.onion.radius * 2/ st.session_state.onion.n_layers) 
     ax_hist.set_title("Distribution of Piece Areas")
     ax_hist.set_xlabel('Area (sq inches)')
     ax_hist.set_ylabel('Frequency')
@@ -501,9 +509,42 @@ def display_piece_cross_sections(polygons, cutting_method):
         st.error(f"An error occurred while visualizing piece shapes: {str(e)}")
         st.write("Please try adjusting the cut parameters.")
 
-import streamlit as st
-import numpy as np
-import matplotlib.pyplot as plt
+
+def encode_settings_to_url(onion, cuts, cutting_method):
+    settings = {
+        'diameter': onion.radius * 2,
+        'n_layers': onion.n_layers,
+        'cuts': [(cut.start, cut.end) for cut in cuts],
+        'cutting_method': cutting_method
+    }
+    encoded_settings = urllib.parse.urlencode({'settings': json.dumps(settings)})
+    return f"?{encoded_settings}"
+
+def decode_settings_from_url():
+    query_params = st.query_params
+    if 'settings' in query_params:
+        logger.info(f"Decoding settings from URL: {query_params['settings']}")
+        try:
+            settings = json.loads(query_params['settings'])
+            onion = HalfOnion(settings['diameter'], settings['n_layers'])
+            cuts = [Cut(start, end) for start, end in settings['cuts']]
+            cutting_method = settings['cutting_method']
+            return onion, cuts, cutting_method
+        except json.JSONDecodeError as e:
+            st.error(f"Invalid settings in URL: {str(e)}. Using default values. raw json {query_params['settings']}")
+            logger.error(f"Error decoding settings: {str(e)}")
+        except KeyError as e:
+            st.error(f"Missing key in settings: {str(e)}. Using default values.")
+        except Exception as e:
+            st.error(f"Error decoding settings: {str(e)}. Using default values.")
+    return None, None, None
+
+
+def update_url(onion, cuts, cutting_method):
+    url = encode_settings_to_url(onion, cuts, cutting_method)
+    st.query_params.update(urllib.parse.parse_qs(url[1:]))
+
+
 
 def main():
     st.set_page_config(layout="wide")
@@ -512,9 +553,30 @@ def main():
     logger.info("Starting main function")
 
     initialize_session_state()
-    onion = create_onion()
-    cutting_method = select_cutting_method()
 
+    # Decode settings from URL if present
+    onion, cuts, cutting_method = decode_settings_from_url()
+    if onion and cuts and cutting_method:
+        logger.info(f"Decoded settings from URL: {onion}, {cuts}, {cutting_method}")
+        st.session_state.onion = onion
+        st.session_state.cuts = cuts
+        st.session_state.cutting_method = cutting_method     
+    else:
+        onion = create_onion()
+    
+
+    # Create sidebar for onion parameters
+    with st.sidebar:
+        st.header("Onion Parameters")
+        diameter = st.slider("Onion Diameter (cm)", 5.0, 15.0, onion.radius * 2, 0.1)
+        n_layers = st.slider("Number of Layers", 3, 15, onion.n_layers)
+
+        if diameter != onion.radius * 2 or n_layers != onion.n_layers:
+            onion = HalfOnion(diameter, n_layers)
+            st.session_state.onion = onion
+            st.session_state.cuts = []  # Reset cuts when onion changes
+
+    cutting_method = select_cutting_method()
     if cutting_method != st.session_state.cutting_method or st.session_state.cuts is None or st.session_state.cuts == []:
         logger.info("Cutting method changed, generating new cuts")
         st.session_state.cutting_method = cutting_method
@@ -525,13 +587,11 @@ def main():
 
     logger.info(f"Current cuts: {st.session_state.cuts}")
 
-    st.header("Interactive Onion Cuts and Piece Size Distribution")
+    # st.header("Interactive Onion Cuts and Piece Size Distribution")
     col1, col2 = st.columns(2)
 
     with col1:
         display_interactive_cuts(onion, st.session_state.cuts)
-
-    logger.info(f"After display_interactive_cuts, cuts: {st.session_state.cuts}")
 
     # Apply cuts and calculate results
     polygons = apply_cuts(onion, st.session_state.cuts)
@@ -540,21 +600,24 @@ def main():
 
     with col2:
         display_piece_area_distribution(areas)
-        display_piece_statistics(areas, shapes)
-
-    # st.header("Resulting Pieces and Aspect Ratio Distribution")
+        
     col3, col4 = st.columns(2)
 
     with col3:
         display_resulting_pieces(polygons, onion)
 
     with col4:
+        display_piece_statistics(areas, shapes)
+    
+    col5, col6 = st.columns(2)
+    with col5:
         display_aspect_ratio_distribution(shapes)
 
-    
-    
     logger.info("Attempting to display piece cross-sections")
     display_piece_cross_sections(polygons, cutting_method)
+
+    # Update the URL with the current settings
+    update_url(onion, st.session_state.cuts, st.session_state.cutting_method)
 
     # Reset update trigger
     if st.session_state.update_triggered:
@@ -565,3 +628,6 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+
