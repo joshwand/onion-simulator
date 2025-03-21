@@ -11,6 +11,7 @@ import logging
 import traceback
 import json
 import urllib.parse
+import scipy.interpolate as interp
 
 
 logger = logging.getLogger(__name__)
@@ -27,18 +28,44 @@ class Cut:
     
     def __repr__(self) -> str:
         return f"Cut({self.start}, {self.end})"
+import numpy as np
+
+
 
 class HalfOnion:
-    def __init__(self, diameter, n_layers):
+    def __init__(self, diameter, n_layers, start_y=0.5, end_y=0.8, p1=(0.2, 1.2), p2=(0.8, 1.0)):
         self.radius = diameter / 2
         self.n_layers = n_layers
-        self.layer_radii = np.linspace(0, self.radius, n_layers + 1)
+        self.start_y = start_y
+        self.end_y = end_y
+        self.p1 = p1
+        self.p2 = p2
+        self.layer_radii = self.calculate_layer_radii()
 
+    def layer_thickness_curve(self, x):
+        points = [(0, self.start_y), self.p1, self.p2, (1.0, self.end_y)]
+        x_values, y_values = zip(*points)
+        spline = interp.CubicSpline(x_values, y_values)
+        return spline(x)
+
+    def calculate_layer_radii(self):
+        radii = [0]
+        total_thickness = sum(self.layer_thickness_curve(i / self.n_layers) for i in range(1, self.n_layers + 1))
+        scale_factor = self.radius / total_thickness
+        
+        current_radius = 0
+        for i in range(1, self.n_layers + 1):
+            x = i / self.n_layers
+            thickness = self.layer_thickness_curve(x) * scale_factor
+            current_radius += thickness
+            radii.append(current_radius)
+        
+        return np.array(radii)
     def create_layer_boundaries(self):
         return [Point(0, 0).buffer(r).boundary.intersection(Point(0, 0).buffer(self.radius).intersection(Polygon([(-self.radius, 0), (self.radius, 0), (self.radius, self.radius), (-self.radius, self.radius)]))) for r in self.layer_radii[1:]]
 
-def apply_cuts(onion, cuts):
 
+def apply_cuts(onion, cuts):
     # remove any cuts that have length < 0.001
     cuts = [cut for cut in cuts if (cut.end[0] - cut.start[0])**2 + (cut.end[1] - cut.start[1])**2 > 0.001]
 
@@ -115,7 +142,7 @@ def visualize_piece_shapes(polygons, title):
 
 def classic_cuts(onion, n_vertical, n_horizontal):
     cuts = []
-    
+    logger.info(f"onion.radius: {onion.radius}, n_vertical: {n_vertical}, n_horizontal: {n_horizontal}")
     # Vertical cuts
     for i in range(1, n_vertical):
         x = -onion.radius + i * onion.radius * 2 / n_vertical
@@ -210,6 +237,7 @@ def josh_cuts(onion, n_horizontal, vertical_height, horizontal_depth, n_vertical
         
         # Check if this is an outermost cut and if it's too narrow at the topmost intersection
         if (i == 0 or i == len(vertical_positions) - 1) and is_cut_too_narrow(x, topmost_y):
+            logger.warning(f"Cut at {x} is too narrow at the topmost intersection. Skipping.")
             continue  # Skip this cut if it's too narrow
         
         # Add the vertical cut
@@ -254,15 +282,6 @@ def visualize_onion_and_cuts(onion, cuts):
             line=dict(color="red", width=2),
             editable=True,            
         )
-        # fig.add_trace(go.Scatter(
-        #     x=[cut.start[0], cut.end[0]], 
-        #     y=[cut.start[1], cut.end[1]], 
-        #     mode='lines+markers', 
-        #     line=dict(color='red', width=2),
-        #     marker=dict(color='red', size=10),
-        #     hoverinfo='skip',
-            
-        # ))
 
     # Calculate the range for both axes
     xrange = [-onion.radius, onion.radius+0.5]
@@ -278,7 +297,6 @@ def visualize_onion_and_cuts(onion, cuts):
         
         height=200,
         
-        # width=300,
         modebar_remove=['zoom2d', 'pan2d', 'select2d', 'lasso2d', 'zoomIn2d', 'zoomOut2d', 'autoScale2d', 'resetScale2d', 'hoverClosestCartesian', 'hoverCompareCartesian', 'toggleSpikelines', 'download'],
         modebar_add=['drawline','eraseshape'],
         newshape=dict(line=dict(color='red', width=2)),
@@ -303,7 +321,6 @@ def visualize_onion_and_cuts(onion, cuts):
 
 def update_cuts(fig):
     logger.info("Entering update_cuts function")
-    
     updated_cuts = []
     for i, shape in enumerate(fig.layout.shapes):
         if shape.type == 'line':
@@ -353,6 +370,34 @@ def visualize_pieces(polygons, onion):
 
     return fig
 
+
+def visualize_layer_thickness_curve(onion):
+    x = np.linspace(0, 1, 100)
+    y = [onion.layer_thickness_curve(xi) for xi in x]
+    
+    fig, ax = plt.subplots(figsize=(6, 3))
+    ax.plot(x, y)
+    # plot onion params (start_y, p1, p2, end_y) as points
+    ax.scatter(x=[0, onion.p1[0], onion.p2[0], 1], y=[onion.start_y, onion.p1[1], onion.p2[1], onion.end_y], color='red', marker='o')
+
+    # add labels for onion params
+    ax.text(0, onion.start_y- 0.05, 'start_y', color='red', ha='center', va='top')
+    ax.text(onion.p1[0], onion.p1[1] - 0.05, 'p1', color='red', ha='center', va='top')
+    ax.text(onion.p2[0], onion.p2[1] - 0.05, 'p2', color='red', ha='center', va='top')
+    ax.text(1, onion.end_y- 0.05, 'end_y', color='red', ha='center', va='top', )
+
+    ax.set_xlabel('Normalized radius')
+    ax.set_ylabel('Relative layer thickness')
+    ax.set_title('Layer Thickness Curve')
+
+    
+    ax.grid(True)
+    ax.set_ylim(0, max(y) + 0.1)
+    ax.set_xlim(0, 1)
+    
+    return fig
+
+
 def initialize_session_state():
     if 'onion' not in st.session_state:
         st.session_state.onion = None
@@ -374,7 +419,9 @@ def select_cutting_method():
     return cutting_method
 
 def generate_cuts_menu(onion, cutting_method):
-    st.sidebar.header("Cut Parameters")
+    # st.sidebar.header("Cut Parameters")
+    cuts = []
+    cutting_method = select_cutting_method()
     if cutting_method == "Josh's Method":
         n_horizontal = st.sidebar.slider("Number of Horizontal Cuts", 2, 10, 3)
         n_vertical = st.sidebar.slider("Number of Vertical Cuts", 3, 20, 10)
@@ -389,8 +436,8 @@ def generate_cuts_menu(onion, cutting_method):
         n_cuts = st.sidebar.slider("Number of Cuts", 3, 20, 10)
         pct_below = st.sidebar.slider("Target Point (fraction of radius below center)", 0.1, 0.9, 0.6)
         cuts = kenji_cuts(onion, n_cuts, pct_below)
-    elif cutting_method == "Custom":
-        cuts = [Cut((-onion.radius, 0), (onion.radius, 0))]
+    # elif cutting_method == "Custom":
+    #     cuts = [Cut((-onion.radius, 0), (onion.radius, 0))]
         
     
     logger.info(f"New cuts generated: {cuts}")
@@ -505,12 +552,16 @@ def display_piece_cross_sections(polygons, cutting_method):
         st.write("Please try adjusting the cut parameters.")
 
 
-def encode_settings_to_url(onion, cuts, cutting_method):
+def encode_settings_to_url(onion: HalfOnion, cuts, cutting_method):
     settings = {
         'diameter': onion.radius * 2,
         'n_layers': onion.n_layers,
         'cuts': [(cut.start, cut.end) for cut in cuts],
-        'cutting_method': cutting_method
+        'cutting_method': cutting_method,
+        'start_y': onion.start_y,
+        'end_y': onion.end_y,
+        'p1': onion.p1,
+        'p2': onion.p2
     }
     encoded_settings = urllib.parse.urlencode({'settings': json.dumps(settings)})
     return f"?{encoded_settings}"
@@ -521,7 +572,14 @@ def decode_settings_from_url():
         logger.info(f"Decoding settings from URL: {query_params['settings']}")
         try:
             settings = json.loads(query_params['settings'])
-            onion = HalfOnion(settings['diameter'], settings['n_layers'])
+            onion = HalfOnion(
+                settings['diameter'],
+                settings['n_layers'],
+                settings.get('start_y', 0.0),
+                settings.get('end_y', 1.0),
+                settings.get('p1'),
+                settings.get('p2')
+            )
             cuts = [Cut(start, end) for start, end in settings['cuts']]
             cutting_method = settings['cutting_method']
             return onion, cuts, cutting_method
@@ -577,29 +635,45 @@ def main():
 
     else:
         if not st.session_state.onion:
-            st.session_state.onion = HalfOnion(5.0, 11)
-
-    with st.sidebar:
-        with st.expander("Onion Parameters"):
-            st.sidebar.header("Onion Parameters")
-            onion_diameter = st.sidebar.slider("Onion Diameter (inches)", 1.0, 10.0, st.session_state.onion.radius * 2, 0.1)
-            n_layers = st.sidebar.slider("Number of Layers", 3, 20, st.session_state.onion.n_layers, 1)
-            
-            onion = HalfOnion(onion_diameter, n_layers)
-            st.session_state.onion = onion
-            logger.info(f"Onion created: diameter={onion_diameter}, layers={n_layers}")
+            st.session_state.onion = HalfOnion(5.0, 9)
 
    
 
-    cutting_method = select_cutting_method()
+    with st.sidebar:
+    
+        st.sidebar.header("Onion Parameters")
+        onion_diameter = st.sidebar.slider("Onion Diameter (inches)", 1.0, 10.0, st.session_state.onion.radius * 2, 0.1)
+        n_layers = st.sidebar.slider("Number of Layers", 3, 20, st.session_state.onion.n_layers, 1)
+            
+    with st.sidebar:
+        with st.expander("Advanced: Onion Layer Thickness"):
+            st.session_state.show_layer_curve = st.checkbox("Show Layer Thickness Curve Helper", value=False)
+            start_y = st.slider("Start y-value", 0.1, 1.5, st.session_state.onion.start_y, 0.05)
+            end_y = st.slider("End y-value", 0.5, 1.5, st.session_state.onion.end_y, 0.05)
+            p1_x = st.slider("P1 x-position", 0.05, 0.5, st.session_state.onion.p1[0], 0.05)
+            p1_y = st.slider("P1 y-value", 0.5, 1.5, st.session_state.onion.p1[1], 0.05)
+            p2_x = st.slider("P2 x-position", 0.5, 0.9, st.session_state.onion.p2[0], 0.05)
+            p2_y = st.slider("P2 y-value", 0.8, 1.2, st.session_state.onion.p2[1], 0.05)
+            
+    new_onion = HalfOnion(onion_diameter, n_layers, start_y, end_y, (p1_x, p1_y), (p2_x, p2_y))
+    if new_onion != st.session_state.onion:
+        st.session_state.onion = new_onion
+        
+    onion = st.session_state.onion           
+            
+    # Add the curve visualization    
+    if st.session_state.show_layer_curve:
+        st.pyplot(visualize_layer_thickness_curve(onion))
+
+
     if cutting_method != st.session_state.cutting_method or st.session_state.cuts is None or st.session_state.cuts == []:
         logger.info("Cutting method changed, generating new cuts")
         st.session_state.cutting_method = cutting_method
-        st.session_state.cuts = generate_cuts_menu(onion, cutting_method)
-        logger.info(f"Generated new cuts: {st.session_state.cuts}")
     else:
         logger.info("Using existing cuts from session state")
-
+        st.session_state.cutting_method = cutting_method
+    
+    st.session_state.cuts = generate_cuts_menu(onion, cutting_method)
     logger.info(f"Current cuts: {st.session_state.cuts}")
 
     # st.header("Interactive Onion Cuts and Piece Size Distribution")
@@ -643,6 +717,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
