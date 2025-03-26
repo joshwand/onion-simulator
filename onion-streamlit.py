@@ -14,6 +14,9 @@ import urllib.parse
 import scipy.interpolate as interp
 
 
+from wfork_streamlit_profiler import Profiler
+
+
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
 
@@ -408,7 +411,7 @@ def initialize_session_state():
     if 'update_triggered' not in st.session_state:
         st.session_state.update_triggered = False
     
-    logger.info(f"Session state initialized: onion={st.session_state.onion}, cuts={st.session_state.cuts}, cutting_method={st.session_state.cutting_method}, update_triggered={st.session_state.update_triggered}")
+    logger.info(f"Session state initialized: onion={st.session_state.onion}, cuts={len(st.session_state.cuts) if st.session_state.cuts else 'None'}, cutting_method={st.session_state.cutting_method}, update_triggered={st.session_state.update_triggered}")
 
 
 def select_cutting_method():
@@ -440,7 +443,7 @@ def generate_cuts_menu(onion, cutting_method):
     #     cuts = [Cut((-onion.radius, 0), (onion.radius, 0))]
         
     
-    logger.info(f"New cuts generated: {cuts}")
+    # logger.info(f"New cuts generated: {cuts}")
     return cuts
 
 
@@ -569,7 +572,7 @@ def encode_settings_to_url(onion: HalfOnion, cuts, cutting_method):
 def decode_settings_from_url():
     query_params = st.query_params
     if 'settings' in query_params:
-        logger.info(f"Decoding settings from URL: {query_params['settings']}")
+        # logger.info(f"Decoding settings from URL: {query_params['settings']}")
         try:
             settings = json.loads(query_params['settings'])
             onion = HalfOnion(
@@ -674,7 +677,7 @@ def main():
         st.session_state.cutting_method = cutting_method
     
     st.session_state.cuts = generate_cuts_menu(onion, cutting_method)
-    logger.info(f"Current cuts: {st.session_state.cuts}")
+    # logger.info(f"Current cuts: {st.session_state.cuts}")
 
     # st.header("Interactive Onion Cuts and Piece Size Distribution")
     col1, col2 = st.columns(2)
@@ -716,7 +719,8 @@ def main():
     logger.info("Main function completed")
 
 if __name__ == "__main__":
-    main()
+    with Profiler():
+        main()
 
 
 

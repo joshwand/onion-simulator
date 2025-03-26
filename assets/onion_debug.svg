@@ -1,0 +1,8 @@
+<svg width="300" height="500" xmlns="http://www.w3.org/2000/svg">
+ <g>
+  <title>Onion Debug</title>
+  <!-- This is the largest path (svg_14), repositioned so that the vertical line is at x=0 -->
+  <path stroke="#00bf00" stroke-width="3" fill="none" d="m1.20627,6.36362c0.90908,0 289.08622,8.30462 288.17714,254.67509c-0.90908,67.35972 -33.63581,184.54717 -157.27018,237.14311c0.2814,-0.38726 -131.29655,-0.62535 -131.36143,-0.35761l0.45447,-491.46059z" id="debug_path"/>
+ </g>
+
+</svg>

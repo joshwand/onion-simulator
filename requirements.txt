@@ -1,6 +1,9 @@
 streamlit
 numpy
-matplotlib
+matplotlib==3.10.1
 plotly
 shapely
 scipy
+# Additional dependencies for 3D visualization
+trimesh
+pyrender
