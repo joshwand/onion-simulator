@@ -41,7 +41,10 @@ class SvgProfileOnion:
         
         # Add n_layers property
         self.n_layers = len(self.svg_profiles)
-        
+    
+    def __repr__(self) -> str:
+        return f"SvgProfileOnion(max_diameter={self.max_diameter}, profile_name={self.profile_name})"
+
     def _load_svg_profiles(self) -> List[SVGProfile]:
         """Load and normalize SVG profiles."""
         svg_file = os.path.join('assets', f"{self.profile_name}.svg")
@@ -127,7 +130,7 @@ class SvgProfileOnion:
         # Process each layer profile
         for layer_idx, profile in enumerate(self.svg_profiles):
             # Get interpolated profile points with proper Bezier curve interpolation
-            profile_points = profile.get_interpolated_profile(resolution=50)  # Higher resolution for smoother curves
+            profile_points = profile.get_interpolated_profile(resolution=35)  # Higher resolution for smoother curves
             if not isinstance(profile_points, np.ndarray):
                 profile_points = np.array(profile_points)
             scaled_points = profile_points * self.scale_factor

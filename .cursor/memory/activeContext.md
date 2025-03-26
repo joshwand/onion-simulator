@@ -2,10 +2,14 @@ current task:
 
 ### 3d onion cutting initial implementation
 
-- calculate the meshes for the individual onion pieces
+- cross-cuts on XZ plane
+- top view is missing cross-cuts
 
 ### next
 
+- calculate the resulting onion pieces bounded by the cuts and the layer surfaces
+- calculate the surface areas of the resulting pieces
+- visualize the resulting pieces
 - diagonal cuts on XY plane (Kenji)
 
 ### future

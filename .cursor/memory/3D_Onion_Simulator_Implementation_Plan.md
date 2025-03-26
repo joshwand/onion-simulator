@@ -26,7 +26,7 @@
    - Visualize the 3D onion model with basic lighting ✅
    - Add layer-specific coloring for better visual distinction ✅
 
-## Phase 2: 3D Model Enhancement 🔄
+## Phase 2: 3D Model Enhancement 
 
 5. **Layer Structure Implementation** ✅
    - Extend the parser to handle multiple layers from SVG ✅
@@ -35,37 +35,36 @@
    - Implement layer normalization with corner detection ✅
    - TODO: Add secondary vertical alignment for layers
 
-6. **3D Rendering Improvements** 🔄
+6. **3D Rendering Improvements** ✅
    - Implement proper materials and transparency to see layers ✅
    - Add cross-section view capability ✅
    - Implement coordinate system visualization (axes indicators) ✅
    - Add layer-specific coloring with qualitative color palette ✅
-   - TODO: Add layer visibility toggles
-   - TODO: Add layer opacity controls
-   - TODO: Add layer legend
 
-7. **Test Multiple Onion Varieties** 🔄
+
+7. **Test Multiple Onion Varieties** ✅
    - Create a set of real-life onion profiles (3-5 varieties) ✅
    - Implement profile selection UI with previews ✅
-   - Test rendering across different profile selections 🔄
+   - Test rendering across different profile selections ✅
 
-## Phase 3: Cutting Implementation ⏱️
+## Phase 3: Cutting Implementation 🔄
 
-8. **Port 2D Cutting Logic**
-   - Adapt existing 2D cutting algorithms to work with the new model
-   - Implement the interface for editing cuts
-   - add root_end_offset slider
-   - Ensure visual feedback during cut editing
+8. **Port 2D Cutting Logic** ✅
+   - Adapt existing 2D cutting algorithms to work with the new model ✅
+   - Implement the interface for editing cuts ✅
+   - add root_end_offset slider ✅
+   - Ensure visual feedback during cut editing ✅
+   - (Kenji method still needs to be re-implemented)
 
-9. **Implement 3D Cross-Cuts**
-   - Create the CrossCut class implementation
-   - Develop geometric algorithms for 3D plane cutting
-   - Visualize cross-cuts in the 3D view
+9. **Implement 3D Cross-Cuts** 🔄
+   - Create the CrossCut class implementation 🔄
+   - Develop geometric algorithms for 3D plane cutting 🔄
+   - Visualize cross-cuts in the 3D view 🔄
 
 10. **Cutting Method Integration**
-    - Extend the three cutting methods (Classic, Kenji, Josh)
-    - Implement editable parameters for each method
-    - Create UI controls for modifying cutting parameters
+    - Extend the three cutting methods (Classic, Kenji, Josh) ✅
+    - Implement editable parameters for each method ✅
+    - Create UI controls for modifying cutting parameters ✅
 
 ## Phase 4: Analysis and Completion ⏱️
 

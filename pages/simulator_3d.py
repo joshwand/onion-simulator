@@ -63,6 +63,29 @@ def generate_cuts_menu(onion, cutting_method):
     
     return cuts
 
+def generate_cross_cuts_menu(onion, cutting_method):
+    """Generate cross-cuts based on parameters."""
+    st.sidebar.header("Cross-Cuts")
+    
+    # Common control for all cutting methods
+    n_cross_cuts = st.sidebar.slider("Number of Cross-Cuts", 3, 12, 6, 1)
+    
+    # Get the appropriate cutting method instance
+    method = None
+    if cutting_method == "Josh's Method":
+        method = JoshCuttingMethod(onion)
+    elif cutting_method == "Classic":
+        method = ClassicCuttingMethod(onion)
+    elif cutting_method == "Kenji":
+        method = KenjiCuttingMethod(onion)
+    
+    # Generate cross-cuts
+    if method:
+        cross_cuts = method.generate_cross_cuts(n_cross_cuts=n_cross_cuts)
+        return cross_cuts
+    
+    return []
+
 def main():
     st.title("3D Onion Simulator")
     st.write("Visualize onion profiles in 3D with interactive controls")
@@ -111,6 +134,8 @@ def main():
         # Initialize session state for cuts if needed
         if 'cuts' not in st.session_state:
             st.session_state.cuts = []
+        if 'cross_cuts' not in st.session_state:
+            st.session_state.cross_cuts = []
         if 'cutting_method' not in st.session_state:
             st.session_state.cutting_method = "Josh's Method"
         
@@ -120,6 +145,9 @@ def main():
             st.session_state.cutting_method = cutting_method
         st.session_state.cuts = generate_cuts_menu(onion, cutting_method)
         
+        # Generate cross-cuts
+        st.session_state.cross_cuts = generate_cross_cuts_menu(onion, cutting_method)
+        
         # Create tabs for different visualizations
         tab1, tab2, tab3 = st.tabs(["3D View", "Cross-Section", "Top View"])
         
@@ -127,7 +155,8 @@ def main():
         with tab1:           
             fig = VisualizationService.create_3d_visualization(
                 onion,
-                cuts=st.session_state.cuts
+                cuts=st.session_state.cuts,
+                cross_cuts=st.session_state.cross_cuts
             )
             st.plotly_chart(fig, use_container_width=True)
             
@@ -181,6 +210,8 @@ def main():
             
     except Exception as e:
         st.error(f"Error creating visualization: {str(e)}")
+        import traceback
+        traceback.print_exc()
         st.error("Please check that the selected profile exists and is valid.")
 
 if __name__ == "__main__":

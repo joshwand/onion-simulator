@@ -389,7 +389,7 @@ class VisualizationService:
         colors = px.colors.qualitative.Set3
         for i, profile in enumerate(onion.svg_profiles):
             # Get the actual profile points with proper interpolation
-            points = profile.get_interpolated_profile(resolution=200)
+            points = profile.get_interpolated_profile(resolution=35)
             
             # Apply scaling
             scaled_points = points * onion.scale_factor
@@ -568,6 +568,7 @@ class VisualizationService:
     def _create_plane_points(cut: CrossCut) -> np.ndarray:
         """
         Create points for visualizing a cross-cut plane.
+        The plane will only exist in the y≤0 region.
         
         Args:
             cut: The cross-cut to visualize
@@ -588,13 +589,18 @@ class VisualizationService:
         v2 = np.cross(normal, v1)
         v2 = v2 / np.linalg.norm(v2)
         
-        # Create four points to define the plane
+        # Create four points to define the plane, but only in y≤0 region
         scale = 2.0  # Adjust this to change the size of the plane
+        
+        # Create initial points
         points = np.array([
             point + scale * (v1 + v2),
             point + scale * (v1 - v2),
             point + scale * (-v1 - v2),
             point + scale * (-v1 + v2)
         ])
+        
+        # Clamp y coordinates to be ≤0
+        points[:, 1] = np.minimum(points[:, 1], 0)
         
         return points 

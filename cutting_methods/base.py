@@ -4,6 +4,7 @@ Abstract base class for cutting methods.
 
 from abc import ABC, abstractmethod
 from typing import List, Dict, Any
+import numpy as np
 
 from core.models import BaseOnion
 from models.cut import Cut, CrossCut
@@ -37,7 +38,40 @@ class CuttingMethod(ABC):
         """
         pass
     
-    
+    def generate_cross_cuts(self, n_cross_cuts: int = 0) -> List[CrossCut]:
+        """
+        Generate 3D cross-cuts as parallel vertical planes (like slicing bread).
+        The cuts are made in the XZ plane, starting from z=0 and moving down to max_height,
+        but only in the bottom half of the onion (y≤0).
+        
+        This implementation is common across all cutting methods as cross-cuts
+        are independent of the specific cutting algorithm.
+        
+        Args:
+            n_cross_cuts: Number of cross-cuts to generate
+            
+        Returns:
+            List of CrossCut objects
+        """
+        cross_cuts = []
+        
+        if n_cross_cuts > 0:
+            # Get the height of the onion
+            height = self.onion.max_height
+            
+            # Calculate spacing between cuts
+            spacing = height / (n_cross_cuts + 1)
+            
+            # Generate evenly spaced vertical cuts from top to bottom
+            # but only in the bottom half (y≤0)
+            for i in range(n_cross_cuts):
+                # Calculate z offset for this cut
+                # Start at 0 and move down to max_height
+                z_offset = spacing * (i + 1)
+                # Create a cut that only exists in the bottom half (y≤0)
+                cross_cuts.append(CrossCut.from_z_offset(-z_offset, y_max=0))  # y_max=0 limits to bottom half
+        
+        return cross_cuts
     
     @staticmethod
     def get_default_params() -> Dict[str, Any]:
@@ -47,7 +81,9 @@ class CuttingMethod(ABC):
         Returns:
             Dictionary of default parameters
         """
-        return {}
+        return {
+            'n_cross_cuts': 6,
+        }
     
     @classmethod
     def from_params(cls, onion: BaseOnion, params: Dict[str, Any]) -> 'CuttingMethod':
