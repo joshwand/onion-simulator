@@ -1,6 +1,0 @@
----
-description: 
-globs: 
-alwaysApply: true
----
-If you encounter a problem when working with data, NEVER fall back to some fake or simplified data. You can do this in a test in order to debug the issue, but NEVER use fake data in non-test code.

@@ -267,7 +267,7 @@ class VisualizationService:
         Returns:
             Plotly figure with the cross-section visualization
         """
-        print(f"VisualizationService.visualize_cross_section: onion: {onion}")
+        # print(f"VisualizationService.visualize_cross_section: onion: {onion}")
         fig = go.Figure()
         
         # Create a circle for the cross-section

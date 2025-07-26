@@ -7,3 +7,4 @@ scipy
 # Additional dependencies for 3D visualization
 trimesh
 pyrender
+pytest

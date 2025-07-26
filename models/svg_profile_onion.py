@@ -8,7 +8,7 @@ from typing import List, Optional, Tuple
 import xml.etree.ElementTree as ET
 from models.svg_profile import SVGProfile
 from utils.svg_parser import extract_paths_from_svg, normalize_paths
-
+import streamlit as st
 class SvgProfileOnion:
     """3D onion model based on SVG profiles."""
     
@@ -45,9 +45,13 @@ class SvgProfileOnion:
     def __repr__(self) -> str:
         return f"SvgProfileOnion(max_diameter={self.max_diameter}, profile_name={self.profile_name})"
 
-    def _load_svg_profiles(self) -> List[SVGProfile]:
+    def __hash__(self) -> int:
+        return hash((self.max_diameter, self.profile_name))
+
+    @st.cache_data
+    def _load_svg_profiles(_self) -> List[SVGProfile]:
         """Load and normalize SVG profiles."""
-        svg_file = os.path.join('assets', f"{self.profile_name}.svg")
+        svg_file = os.path.join('assets', f"{_self.profile_name}.svg")
         if not os.path.exists(svg_file):
             raise FileNotFoundError(f"SVG profile not found: {svg_file}")
         
@@ -102,6 +106,7 @@ class SvgProfileOnion:
         
         return max_height * self.scale_factor, max_width * self.scale_factor
     
+    @st.cache_data(hash_funcs={"models.svg_profile_onion.SvgProfileOnion": lambda x: hash((x.max_diameter, x.profile_name))})
     def generate_mesh(self, resolution: int = 36) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
         """
         Generate a 3D mesh by revolving the profiles 180 degrees around the Z-axis.
