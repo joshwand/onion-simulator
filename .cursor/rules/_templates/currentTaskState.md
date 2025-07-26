@@ -1,0 +1,1 @@
+/Users/josh/code/coding-agent-rules/_templates/currentTaskState.md
