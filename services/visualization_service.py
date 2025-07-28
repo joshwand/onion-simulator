@@ -140,6 +140,61 @@ class VisualizationService:
         return fig
     
     @staticmethod
+    def visualize_pieces(
+        pieces: List[OnionPiece3D],
+        title: str = "Onion Pieces"
+    ) -> go.Figure:
+        """
+        Create a 3D visualization of onion pieces.
+
+        Args:
+            pieces: List of OnionPiece3D objects to visualize.
+            title: The title for the plot.
+
+        Returns:
+            A Plotly figure containing the 3D visualization of the pieces.
+        """
+        fig = go.Figure()
+        colors = px.colors.qualitative.Plotly
+
+        for i, piece in enumerate(pieces):
+            if piece.mesh is None or piece.mesh.is_empty:
+                continue
+
+            mesh = piece.mesh
+            color = colors[i % len(colors)]
+
+            fig.add_trace(go.Mesh3d(
+                x=mesh.vertices[:, 0],
+                y=mesh.vertices[:, 1],
+                z=mesh.vertices[:, 2],
+                i=mesh.faces[:, 0],
+                j=mesh.faces[:, 1],
+                k=mesh.faces[:, 2],
+                color=color,
+                opacity=0.9,
+                name=f'Piece {i+1}'
+            ))
+
+        fig.update_layout(
+            title=title,
+            scene=dict(
+                aspectmode='data',
+                xaxis_title='X',
+                yaxis_title='Y',
+                zaxis_title='Z',
+                camera=dict(
+                    up=dict(x=0, y=0, z=1),
+                    center=dict(x=0, y=0, z=0),
+                    eye=dict(x=-1.5, y=-1.5, z=1.5)
+                )
+            ),
+            showlegend=True
+        )
+
+        return fig
+    
+    @staticmethod
     def create_3d_visualization(
         onion: SvgProfileOnion,
         cuts: Optional[List[Cut]] = None,
@@ -181,23 +236,8 @@ class VisualizationService:
                 name='Onion'
             ))
         else:
-            # Show individual pieces with different colors
-            colors = px.colors.qualitative.Set3[:len(pieces)]
-            for i, piece in enumerate(pieces):
-                piece_vertices, piece_faces = VisualizationService._get_piece_mesh(
-                    vertices, faces, layer_indices, piece
-                )
-                
-                fig.add_trace(go.Mesh3d(
-                    x=piece_vertices[:, 0],
-                    y=piece_vertices[:, 1],
-                    z=piece_vertices[:, 2],
-                    i=piece_faces[:, 0],
-                    j=piece_faces[:, 1],
-                    k=piece_faces[:, 2],
-                    vertexcolor=[colors[i]] * len(piece_vertices),
-                    name=f'Piece {i}'
-                ))
+            # this is the old way, which is wrong. The new way is to call visualize_pieces
+            pass
         
         # Add cuts if provided
         if cuts:

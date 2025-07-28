@@ -87,45 +87,21 @@ class GeometryService:
         Returns:
             List of OnionPiece3D objects
         """
-        all_pieces = []
         cutter = SequentialCutter(optimize_order=True)
         
-        # Process each layer separately
-        for layer_idx, profile in enumerate(onion.svg_profiles):
-            try:
-                # Create a 3D mesh from the layer profile
-                layer_mesh = GeometryService._create_layer_mesh(profile, onion, layer_idx)
-                
-                if layer_mesh is None or layer_mesh.is_empty:
-                    continue
-                
-                # Transform cuts for this layer
-                layer_cuts = GeometryService._transform_cuts_for_layer(cuts, profile, onion)
-                
-                # Create layer-specific planes (top and bottom of layer)
-                layer_thickness = onion.layer_thickness
-                layer_z_bottom = layer_idx * layer_thickness
-                layer_z_top = (layer_idx + 1) * layer_thickness
-                layer_planes = [
-                    (0, 0, 1, -layer_z_bottom),  # Bottom plane
-                    (0, 0, 1, -layer_z_top)      # Top plane
-                ]
-                
-                # Apply cuts to this layer
-                layer_pieces = cutter.apply_cuts_sequential(
-                    layer_mesh,
-                    layer_cuts,
-                    cross_cuts=cross_cuts,
-                    layer_planes=layer_planes,
-                    layer_index=layer_idx,
-                    min_volume=1e-9  # Small threshold for filtering tiny pieces
-                )
-                
-                all_pieces.extend(layer_pieces)
-                
-            except Exception as e:
-                print(f"Warning: Failed to process layer {layer_idx}: {e}")
-                continue
+        # Create a single mesh for the entire onion
+        onion_mesh = GeometryService.create_onion_mesh_3d(onion)
+        
+        if onion_mesh is None or onion_mesh.is_empty:
+            return []
+            
+        # Apply all cuts to the single onion mesh
+        all_pieces = cutter.apply_cuts_sequential(
+            onion_mesh,
+            cuts,
+            cross_cuts=cross_cuts,
+            min_volume=1e-9  # Small threshold for filtering tiny pieces
+        )
         
         return all_pieces
     
@@ -322,28 +298,26 @@ class GeometryService:
             Complete 3D mesh of the onion, or None if creation fails
         """
         try:
-            layer_meshes = []
+            # Generate mesh data for the entire onion
+            vertices, faces, _, _ = onion.generate_mesh()
             
-            # Create mesh for each layer
-            for layer_idx, profile in enumerate(onion.svg_profiles):
-                layer_mesh = GeometryService._create_layer_mesh(profile, onion, layer_idx)
-                if layer_mesh is not None and not layer_mesh.is_empty:
-                    layer_meshes.append(layer_mesh)
-            
-            if not layer_meshes:
+            if vertices is None or faces is None or len(vertices) == 0 or len(faces) == 0:
                 return None
             
-            # Combine all layer meshes
-            if len(layer_meshes) == 1:
-                combined_mesh = layer_meshes[0]
-            else:
-                combined_mesh = trimesh.util.concatenate(layer_meshes)
+            # Create the Trimesh object
+            mesh = trimesh.Trimesh(vertices=vertices, faces=faces)
             
-            # Clean up the combined mesh
-            combined_mesh.remove_duplicate_faces()
-            combined_mesh.remove_degenerate_faces()
+            # Validate and repair if necessary
+            if not mesh.is_watertight:
+                mesh.fill_holes()
             
-            return combined_mesh
+            if not mesh.is_volume:
+                # If it's not a volume, it might be a collection of surfaces.
+                # Attempt to stitch it into a single manifold mesh.
+                mesh.merge_vertices()
+                mesh.remove_duplicate_faces()
+            
+            return mesh
             
         except Exception as e:
             print(f"Warning: Failed to create complete onion mesh: {e}")

@@ -6,6 +6,7 @@ import streamlit as st
 import os
 from models.svg_profile_onion import SvgProfileOnion
 from services.visualization_service import VisualizationService
+from services.geometry_service import GeometryService
 from models.cut import Cut, CrossCut
 from cutting_methods.classic import ClassicCuttingMethod
 from cutting_methods.kenji import KenjiCuttingMethod
@@ -148,8 +149,11 @@ def main():
         # Generate cross-cuts
         st.session_state.cross_cuts = generate_cross_cuts_menu(onion, cutting_method)
         
+        # Get pieces from geometry service
+        pieces = GeometryService.apply_cuts_to_onion(onion, st.session_state.cuts, st.session_state.cross_cuts)
+
         # Create tabs for different visualizations
-        tab1, tab2, tab3 = st.tabs(["3D View", "Cross-Section", "Top View"])
+        tab1, tab2, tab3, tab4 = st.tabs(["3D View", "Pieces", "Cross-Section", "Top View"])
         
         # 3D visualization
         with tab1:           
@@ -168,8 +172,16 @@ def main():
             - ↺ Reset: Double-click
             """)
         
-        # Cross-section view
         with tab2:
+            st.header("3D Pieces")
+            if pieces:
+                fig_pieces = VisualizationService.visualize_pieces(pieces)
+                st.plotly_chart(fig_pieces, use_container_width=True)
+            else:
+                st.write("No pieces generated.")
+
+        # Cross-section view
+        with tab3:
             st.header("Cross-Section View")
             fig_cross = VisualizationService.visualize_cross_section(
                 onion,
@@ -178,7 +190,7 @@ def main():
             st.plotly_chart(fig_cross, use_container_width=True)
         
         # Top view
-        with tab3:
+        with tab4:
             st.header("Top View")
             fig_top = VisualizationService.visualize_top_view(
                 onion,
