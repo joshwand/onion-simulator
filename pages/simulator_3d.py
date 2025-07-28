@@ -150,7 +150,7 @@ def main():
         st.session_state.cross_cuts = generate_cross_cuts_menu(onion, cutting_method)
         
         # Get pieces from geometry service
-        pieces = GeometryService.apply_cuts_to_onion(onion, st.session_state.cuts, st.session_state.cross_cuts)
+        pieces = GeometryService.apply_cuts_3d(onion, st.session_state.cuts, st.session_state.cross_cuts)
 
         # Create tabs for different visualizations
         tab1, tab2, tab3, tab4 = st.tabs(["3D View", "Pieces", "Cross-Section", "Top View"])
