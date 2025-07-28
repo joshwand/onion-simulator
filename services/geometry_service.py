@@ -2,7 +2,7 @@
 Geometric calculations for both 2D and 3D onion simulators.
 """
 
-from typing import List, Dict, Any, Tuple, Union
+from typing import List, Dict, Any, Tuple, Union, Optional
 import numpy as np
 from shapely.geometry import LineString, Point, Polygon
 from shapely.ops import unary_union, polygonize
@@ -11,6 +11,8 @@ from core.models import BaseOnion
 from models.onion_2d import HalfOnion
 from models.svg_profile_onion import SvgProfileOnion
 from models.cut import Cut, CrossCut, OnionPiece3D
+from models.sequential_cutter import SequentialCutter
+import trimesh
 
 
 class GeometryService:
@@ -45,9 +47,96 @@ class GeometryService:
         return [polygon for polygon in polygons if polygon.is_valid and polygon.area > 0]
     
     @staticmethod
-    def apply_cuts_3d(onion: SvgProfileOnion, cuts: List[Cut], cross_cuts: List[CrossCut] = None) -> List[OnionPiece3D]:
+    def apply_cuts_3d(
+        onion: SvgProfileOnion, 
+        cuts: List[Cut], 
+        cross_cuts: List[CrossCut] = None,
+        use_advanced_cutting: bool = True
+    ) -> List[OnionPiece3D]:
         """
         Apply both standard cuts and cross-cuts to a 3D onion model to get pieces.
+        
+        Args:
+            onion: The 3D SVG profile onion model
+            cuts: List of 2D cuts
+            cross_cuts: Optional list of 3D cross-cuts
+            use_advanced_cutting: Whether to use the new SequentialCutter for enhanced 3D cutting
+            
+        Returns:
+            List of OnionPiece3D objects
+        """
+        if use_advanced_cutting:
+            return GeometryService._apply_cuts_3d_advanced(onion, cuts, cross_cuts)
+        else:
+            return GeometryService._apply_cuts_3d_legacy(onion, cuts, cross_cuts)
+    
+    @staticmethod
+    def _apply_cuts_3d_advanced(
+        onion: SvgProfileOnion, 
+        cuts: List[Cut], 
+        cross_cuts: List[CrossCut] = None
+    ) -> List[OnionPiece3D]:
+        """
+        Apply cuts using the advanced SequentialCutter approach.
+        
+        Args:
+            onion: The 3D SVG profile onion model
+            cuts: List of 2D cuts
+            cross_cuts: Optional list of 3D cross-cuts
+            
+        Returns:
+            List of OnionPiece3D objects
+        """
+        all_pieces = []
+        cutter = SequentialCutter(optimize_order=True)
+        
+        # Process each layer separately
+        for layer_idx, profile in enumerate(onion.svg_profiles):
+            try:
+                # Create a 3D mesh from the layer profile
+                layer_mesh = GeometryService._create_layer_mesh(profile, onion, layer_idx)
+                
+                if layer_mesh is None or layer_mesh.is_empty:
+                    continue
+                
+                # Transform cuts for this layer
+                layer_cuts = GeometryService._transform_cuts_for_layer(cuts, profile, onion)
+                
+                # Create layer-specific planes (top and bottom of layer)
+                layer_thickness = onion.layer_thickness
+                layer_z_bottom = layer_idx * layer_thickness
+                layer_z_top = (layer_idx + 1) * layer_thickness
+                layer_planes = [
+                    (0, 0, 1, -layer_z_bottom),  # Bottom plane
+                    (0, 0, 1, -layer_z_top)      # Top plane
+                ]
+                
+                # Apply cuts to this layer
+                layer_pieces = cutter.apply_cuts_sequential(
+                    layer_mesh,
+                    layer_cuts,
+                    cross_cuts=cross_cuts,
+                    layer_planes=layer_planes,
+                    layer_index=layer_idx,
+                    min_volume=1e-9  # Small threshold for filtering tiny pieces
+                )
+                
+                all_pieces.extend(layer_pieces)
+                
+            except Exception as e:
+                print(f"Warning: Failed to process layer {layer_idx}: {e}")
+                continue
+        
+        return all_pieces
+    
+    @staticmethod
+    def _apply_cuts_3d_legacy(
+        onion: SvgProfileOnion, 
+        cuts: List[Cut], 
+        cross_cuts: List[CrossCut] = None
+    ) -> List[OnionPiece3D]:
+        """
+        Apply cuts using the legacy approach (for backward compatibility).
         
         Args:
             onion: The 3D SVG profile onion model
@@ -75,7 +164,7 @@ class GeometryService:
         
         # Then, apply cross-cuts if provided
         if cross_cuts:
-            # TODO: Implement cross-cut application
+            # TODO: Implement legacy cross-cut application
             pass
         
         # Create 3D pieces from the layer pieces
@@ -101,6 +190,78 @@ class GeometryService:
                 pieces_3d.append(OnionPiece3D(geometry))
         
         return pieces_3d
+    
+    @staticmethod
+    def _create_layer_mesh(
+        profile: 'SVGProfile', 
+        onion: SvgProfileOnion, 
+        layer_idx: int
+    ) -> Optional[trimesh.Trimesh]:
+        """
+        Create a 3D mesh from a layer profile.
+        
+        Args:
+            profile: The SVG profile for this layer
+            onion: The parent onion model
+            layer_idx: Index of the layer
+            
+        Returns:
+            3D mesh representing the layer, or None if creation fails
+        """
+        try:
+            # Get profile boundary points
+            boundary_points = profile.get_boundary_points()
+            
+            if len(boundary_points) < 3:
+                return None
+            
+            # Convert to 3D points with proper Z coordinates
+            layer_thickness = onion.layer_thickness
+            z_bottom = layer_idx * layer_thickness
+            z_top = (layer_idx + 1) * layer_thickness
+            
+            # Create bottom and top faces
+            bottom_vertices = [(x, y, z_bottom) for x, y in boundary_points]
+            top_vertices = [(x, y, z_top) for x, y in boundary_points]
+            
+            # Combine vertices
+            vertices = np.array(bottom_vertices + top_vertices)
+            
+            # Create faces (triangulation)
+            n_points = len(boundary_points)
+            faces = []
+            
+            # Bottom face (triangulate using fan triangulation)
+            for i in range(1, n_points - 1):
+                faces.append([0, i, i + 1])
+            
+            # Top face (triangulate using fan triangulation, reversed winding)
+            for i in range(1, n_points - 1):
+                faces.append([n_points, n_points + i + 1, n_points + i])
+            
+            # Side faces (connect bottom to top)
+            for i in range(n_points):
+                next_i = (i + 1) % n_points
+                # Two triangles per side face
+                faces.append([i, next_i, n_points + i])
+                faces.append([next_i, n_points + next_i, n_points + i])
+            
+            faces = np.array(faces)
+            
+            # Create mesh
+            mesh = trimesh.Trimesh(vertices=vertices, faces=faces)
+            
+            # Validate and repair mesh if needed
+            if not mesh.is_watertight:
+                mesh.fill_holes()
+                mesh.remove_duplicate_faces()
+                mesh.remove_degenerate_faces()
+            
+            return mesh
+            
+        except Exception as e:
+            print(f"Warning: Failed to create layer mesh for layer {layer_idx}: {e}")
+            return None
     
     @staticmethod
     def _transform_cuts_for_layer(cuts: List[Cut], profile: 'SVGProfile', onion: SvgProfileOnion) -> List[Cut]:
@@ -148,6 +309,45 @@ class GeometryService:
             transformed_cuts.append(Cut((start_x, start_y), (end_x, end_y)))
         
         return transformed_cuts
+    
+    @staticmethod
+    def create_onion_mesh_3d(onion: SvgProfileOnion) -> Optional[trimesh.Trimesh]:
+        """
+        Create a complete 3D mesh of the onion from all layer profiles.
+        
+        Args:
+            onion: The 3D SVG profile onion model
+            
+        Returns:
+            Complete 3D mesh of the onion, or None if creation fails
+        """
+        try:
+            layer_meshes = []
+            
+            # Create mesh for each layer
+            for layer_idx, profile in enumerate(onion.svg_profiles):
+                layer_mesh = GeometryService._create_layer_mesh(profile, onion, layer_idx)
+                if layer_mesh is not None and not layer_mesh.is_empty:
+                    layer_meshes.append(layer_mesh)
+            
+            if not layer_meshes:
+                return None
+            
+            # Combine all layer meshes
+            if len(layer_meshes) == 1:
+                combined_mesh = layer_meshes[0]
+            else:
+                combined_mesh = trimesh.util.concatenate(layer_meshes)
+            
+            # Clean up the combined mesh
+            combined_mesh.remove_duplicate_faces()
+            combined_mesh.remove_degenerate_faces()
+            
+            return combined_mesh
+            
+        except Exception as e:
+            print(f"Warning: Failed to create complete onion mesh: {e}")
+            return None
     
     @staticmethod
     def calculate_volume(piece: OnionPiece3D) -> float:
