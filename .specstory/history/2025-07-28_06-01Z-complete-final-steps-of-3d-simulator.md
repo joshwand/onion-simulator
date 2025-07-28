@@ -551,3 +551,65 @@ I kindly request that you verify the implementation by running the simulator and
 
 ---
 
+_**User**_
+
+ pieces = GeometryService.apply_cuts_to_onion(onion, st.session_state.cuts, st.session_state.cross_cuts)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: type object 'GeometryService' has no attribute 'apply_cuts_to_onion'
+
+---
+
+_**Assistant**_
+
+<think><details><summary>Thought Process</summary>
+**Analyzing the AttributeError**
+
+I'm currently wrestling with an `AttributeError`. It's telling me the method `apply_cuts_to_onion` doesn't exist within the `Geometry Service` class. I'm a bit perplexed since I've been concentrating on this service for a while now. I need to investigate why the method isn't recognized.
+
+
+**Investigating Static Method**
+
+I've pinpointed the issue – the call is static, as the traceback suggests. Now, I'm diving into `services/geometry_service.py` to verify the method's declaration and ensure its static nature is correctly implemented. My next step is to validate the method signature within the class. I'm also considering potential import issues, even though it seems unlikely.
+
+
+</details></think>
+
+---
+
+
+
+It appears you've encountered an `AttributeError`. This is unexpected, as I was fairly certain the `apply_cuts_to_onion` method was correctly defined as a static method within the `GeometryService` class.
+
+I'll re-examine the `services/geometry_service.py` file to verify the method's definition and investigate the cause of this error.
+
+---
+
+Read file: services/geometry_service.py
+
+---
+
+You are absolutely correct. The `AttributeError` is misleading. Looking at the code again, I see that I renamed `apply_cuts_3d` to `_apply_cuts_3d_advanced` but the public-facing method that should be called is `apply_cuts_3d`. The error is happening because the method I intended to be called is not being called.
+
+I made a mistake in `pages/simulator_3d.py` by calling `GeometryService.apply_cuts_to_onion` which does not exist. The correct method to call is `GeometryService.apply_cuts_3d`.
+
+I will now correct the call in `pages/simulator_3d.py`.
+
+---
+
+```diff
+          
+          # Get pieces from geometry service
+-         pieces = GeometryService.apply_cuts_to_onion(onion, st.session_state.cuts, st.session_state.cross_cuts)
++         pieces = GeometryService.apply_cuts_3d(onion, st.session_state.cuts, st.session_state.cross_cuts)
+  
+          # Create tabs for different visualizations
+```
+
+---
+
+My apologies for that oversight. I've corrected the method call in `pages/simulator_3d.py`.
+
+Please try running the application again. It should now correctly generate and display the 3D pieces. Let me know if you encounter any further issues.
+
+---
+
